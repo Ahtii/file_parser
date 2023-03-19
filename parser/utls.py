@@ -6,7 +6,6 @@ from django.conf import settings
 from parser.constants import DEFAULT_FILE_CHUNK_SIZE, FILE_MODEL_NAME_MAPPER
 
 
-
 class UploadCsvFile:
 
     def __init__(self, file):
@@ -68,6 +67,7 @@ class ParseCsvFileToDatabase:
     @staticmethod
     def get_csv_file_path(file_name):
         return os.path.join(settings.CSV_FILE_PATH, f"{file_name}.csv").replace("\\","/")
+
 
 class RenderCsvDatabaseFile:
     """
