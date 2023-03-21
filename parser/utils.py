@@ -1,10 +1,10 @@
-import pandas as pd
-import os
+from os.path import join as path_join
 
 from django.conf import settings
 
-from parser.constants import DEFAULT_FILE_CHUNK_SIZE, FILE_MODEL_NAME_MAPPER
+from parser.constants import DEFAULT_FILE_CHUNK_SIZE, FILE_MODEL_NAME_MAPPER, DEFAULT_RECORD_LIMIT, SORT_DIRECTION_DESC
 
+from pandas import read_csv
 
 class UploadCsvFile:
 
@@ -23,7 +23,7 @@ class UploadCsvFile:
 
     def save_file(self):
         file_name = self.file.name
-        file_path = os.path.join(settings.CSV_FILE_PATH, file_name).replace("\\","/")
+        file_path = self.get_csv_file_path(file_name)
 
         if not file_name.endswith('.csv'):
             raise Exception("Invalid file format. Please upload csv file.")
@@ -32,6 +32,11 @@ class UploadCsvFile:
             file_obj.write(self.file.read().decode('utf-8'))
 
         return file_path
+
+    @staticmethod
+    def get_csv_file_path(file_name):
+        file_name = file_name.split(".")[0] if file_name.endswith('.csv') else file_name
+        return path_join(settings.CSV_FILE_PATH, f"{file_name}.csv").replace("\\","/")
 
 
 class ParseCsvFileToDatabase:
@@ -46,17 +51,11 @@ class ParseCsvFileToDatabase:
 
     def load_into_db(self):
         error_msg = str()
-        file_path = self.get_csv_file_path(self.file_name)
+        file_path = UploadCsvFile.get_csv_file_path(self.file_name)
+        print("f: ", file_path)
 
         try:
-            for chunk in pd.read_csv(file_path, chunksize=DEFAULT_FILE_CHUNK_SIZE):
-                columns = chunk.columns
-                model_objs = [
-                    self.model_name(
-                        **{column: row[column] for column in columns}
-                    ) for _, row in chunk.iterrows()
-                ]
-                self.model_name.objects.bulk_create(model_objs)
+            self.populate_db(file_path)
         except FileNotFoundError as error:
             *_, error_msg = error.args
         except Exception as error:
@@ -64,9 +63,16 @@ class ParseCsvFileToDatabase:
 
         return error_msg
 
-    @staticmethod
-    def get_csv_file_path(file_name):
-        return os.path.join(settings.CSV_FILE_PATH, f"{file_name}.csv").replace("\\","/")
+    def populate_db(self, file_path):
+        for chunk in read_csv(file_path, chunksize=DEFAULT_FILE_CHUNK_SIZE):
+            columns = chunk.columns
+            model_objs = [
+                self.model_name(
+                    **{column: row[column] for column in columns}
+                ) for _, row in chunk.iterrows()
+            ]
+            self.model_name.objects.bulk_create(model_objs)
+
 
 
 class RenderCsvDatabaseFile:
@@ -84,16 +90,21 @@ class RenderCsvDatabaseFile:
         records = dict()
 
         try:
-            record_limit = int(filters.get('limit', 50))
-
-            if (sort_by := filters.get('column_name')) and (direction := filters.get('direction')):
-                sort_by = f"-{sort_by}" if direction.lower() == 'descending' else sort_by
-                records = self.model_name.objects.order_by(sort_by)
-            else:
-                records = self.model_name.objects.all()
-
-            records = {self.file_name: records[:record_limit].values()}
+            records = self.get_filtered_records(filters)
         except Exception as error:
             error_msg, *_ = error.args
 
         return error_msg, records
+
+    def get_filtered_records(self, filters):
+        record_limit = int(filters.get('limit', DEFAULT_RECORD_LIMIT))
+        sort_by = filters.get('column_name')
+        direction = filters.get('direction')
+
+        if sort_by and direction:
+            sort_by = f"-{sort_by}" if direction.lower() == SORT_DIRECTION_DESC else sort_by
+            records = self.model_name.objects.order_by(sort_by)
+        else:
+            records = self.model_name.objects.all()
+
+        return {self.file_name: records[:record_limit].values()}

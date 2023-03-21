@@ -3,7 +3,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework import status
 
-from parser.utls import UploadCsvFile, ParseCsvFileToDatabase, RenderCsvDatabaseFile
+from parser.utils import UploadCsvFile, ParseCsvFileToDatabase, RenderCsvDatabaseFile
 
 
 class UploadCsvFileAPIView(APIView):
