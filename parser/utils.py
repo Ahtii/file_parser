@@ -52,7 +52,6 @@ class ParseCsvFileToDatabase:
     def load_into_db(self):
         error_msg = str()
         file_path = UploadCsvFile.get_csv_file_path(self.file_name)
-        print("f: ", file_path)
 
         try:
             self.populate_db(file_path)
